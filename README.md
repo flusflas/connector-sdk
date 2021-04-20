@@ -26,6 +26,20 @@
 >   AsyncFunctionCallbackURL: asyncCallbackURL,
 > }
 > ```
+> 
+> #### Custom topic matcher
+> A custom function can be used for topic matching to override the default
+> equality check between received topic and function topic.
+> ```go
+> matchLowercase := func(topic, route string) bool {
+>     return strings.ToLower(topic) == strings.ToLower(route)
+> }
+> 
+> config := &types.ControllerConfig{
+>   ...
+>   TopicMatcher: matchLowercase,
+> }
+> ```
 
 The connector-sdk is a library written in Go that you can use to create event-connectors for OpenFaaS functions.
 

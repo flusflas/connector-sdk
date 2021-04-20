@@ -44,6 +44,9 @@ type ControllerConfig struct {
 
 	// Namespace defines the namespace of the functions to be mapped and invoked. If empty, all namespaces will be used.
 	Namespace string
+
+	// TopicMatcher overrides how the topic received is matched against the mapped functions. Defaults to an equality check.
+	TopicMatcher MatchTopicFunc
 }
 
 // Controller is used to invoke functions on a per-topic basis and to subscribe to responses returned by said functions.
@@ -90,7 +93,7 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 
 	subs := []ResponseSubscriber{}
 
-	topicMap := NewTopicMap()
+	topicMap := NewTopicMap(config.TopicMatcher)
 
 	c := controller{
 		Config:      config,
