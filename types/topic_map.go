@@ -7,27 +7,39 @@ import (
 	"sync"
 )
 
-func NewTopicMap() TopicMap {
+type MatchTopicFunc func(topicReceived, topicFunction string) bool
+
+func defaultMatchTopic(topicReceived, topicFunction string) bool {
+	return topicReceived == topicFunction
+}
+
+func NewTopicMap(matchFunc MatchTopicFunc) TopicMap {
 	lookup := make(map[string][]string)
+
+	if matchFunc == nil {
+		matchFunc = defaultMatchTopic
+	}
+
 	return TopicMap{
-		lookup: &lookup,
-		lock:   sync.RWMutex{},
+		lookup:    &lookup,
+		lock:      sync.RWMutex{},
+		matchFunc: matchFunc,
 	}
 }
 
 type TopicMap struct {
-	lookup *map[string][]string
-	lock   sync.RWMutex
+	lookup    *map[string][]string
+	lock      sync.RWMutex
+	matchFunc MatchTopicFunc
 }
 
 func (t *TopicMap) Match(topicName string) []string {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-
 	var values []string
 
 	for key, val := range *t.lookup {
-		if key == topicName {
+		if t.matchFunc(topicName, key) {
 			values = val
 			break
 		}
