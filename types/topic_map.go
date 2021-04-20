@@ -38,10 +38,11 @@ func (t *TopicMap) Match(topicName string) []string {
 	defer t.lock.RUnlock()
 	var values []string
 
-	for key, val := range *t.lookup {
+	for key, functions := range *t.lookup {
 		if t.matchFunc(topicName, key) {
-			values = val
-			break
+			for _, function := range functions {
+				values = append(values, function)
+			}
 		}
 	}
 
