@@ -22,6 +22,7 @@ type Invoker struct {
 	Client        *http.Client
 	GatewayURL    string
 	CallbackURL   string
+	SendTopic     bool
 	Responses     chan InvokerResponse
 }
 
@@ -38,12 +39,13 @@ type InvokerResponse struct {
 }
 
 // NewInvoker constructs an Invoker instance
-func NewInvoker(gatewayURL, callbackURL string, client *http.Client, printResponse bool) *Invoker {
+func NewInvoker(gatewayURL, callbackURL string, client *http.Client, printResponse, sendTopic bool) *Invoker {
 	return &Invoker{
 		PrintResponse: printResponse,
 		Client:        client,
 		GatewayURL:    gatewayURL,
 		CallbackURL:   callbackURL,
+		SendTopic:     sendTopic,
 		Responses:     make(chan InvokerResponse),
 	}
 }
@@ -69,7 +71,12 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 		gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, matchedFunction)
 		reader := bytes.NewReader(*message)
 
-		body, statusCode, header, doErr := invokefunction(ctx, i.Client, gwURL, i.CallbackURL, reader)
+		sendTopic := ""
+		if i.SendTopic {
+			sendTopic = topic
+		}
+
+		body, statusCode, header, doErr := invokefunction(ctx, i.Client, gwURL, sendTopic, i.CallbackURL, reader)
 
 		if doErr != nil {
 			i.Responses <- InvokerResponse{
@@ -90,7 +97,7 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 	}
 }
 
-func invokefunction(ctx context.Context, c *http.Client, gwURL, callbackURL string, reader io.Reader) (*[]byte, int, *http.Header, error) {
+func invokefunction(ctx context.Context, c *http.Client, gwURL, topic, callbackURL string, reader io.Reader) (*[]byte, int, *http.Header, error) {
 
 	httpReq, err := http.NewRequest(http.MethodPost, gwURL, reader)
 	if err != nil {
@@ -100,6 +107,10 @@ func invokefunction(ctx context.Context, c *http.Client, gwURL, callbackURL stri
 
 	if httpReq.Body != nil {
 		defer httpReq.Body.Close()
+	}
+
+	if topic != "" {
+		httpReq.Header.Add("X-Topic", topic)
 	}
 
 	if callbackURL != "" {

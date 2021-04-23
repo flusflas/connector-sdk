@@ -45,6 +45,9 @@ type ControllerConfig struct {
 	// Namespace defines the namespace of the functions to be mapped and invoked. If empty, all namespaces will be used.
 	Namespace string
 
+	// SendTopic defines whether the topic will be sent in the invocation request using the header 'X-Topic'.
+	SendTopic bool
+
 	// TopicMatcher overrides how the topic received is matched against the mapped functions. Defaults to an equality check.
 	TopicMatcher MatchTopicFunc
 }
@@ -89,7 +92,7 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 	invoker := NewInvoker(gatewayFunctionPath,
 		config.AsyncFunctionCallbackURL,
 		MakeClient(config.UpstreamTimeout),
-		config.PrintResponse)
+		config.PrintResponse, config.SendTopic)
 
 	subs := []ResponseSubscriber{}
 
