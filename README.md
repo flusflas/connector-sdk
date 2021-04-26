@@ -40,6 +40,16 @@
 >   TopicMatcher: matchLowercase,
 > }
 > ```
+>
+> #### Send message topic to function
+> To give some context to the invoked functions, the topic can be sent in the
+> invocation requests in an `X-Topic` header.
+> ```go
+> config := &types.ControllerConfig{
+>   ...
+>   SendTopic: true,
+> }
+> ```
 
 The connector-sdk is a library written in Go that you can use to create event-connectors for OpenFaaS functions.
 
