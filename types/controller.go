@@ -42,6 +42,10 @@ type ControllerConfig struct {
 	// PrintSync indicates whether the sync should be logged.
 	PrintSync bool
 
+	// ContentType defines which content type will be set in the header to invoke the function. i.e "application/json".
+	// Optional, if not set the Content-Type header will not be set.
+	ContentType string
+
 	// Namespace defines the namespace of the functions to be mapped and invoked. If empty, all namespaces will be used.
 	Namespace string
 
@@ -90,8 +94,9 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 	gatewayFunctionPath := gatewayRoute(config)
 
 	invoker := NewInvoker(gatewayFunctionPath,
-		config.AsyncFunctionCallbackURL,
 		MakeClient(config.UpstreamTimeout),
+		config.ContentType,
+		config.AsyncFunctionCallbackURL,
 		config.PrintResponse, config.SendTopic)
 
 	subs := []ResponseSubscriber{}
