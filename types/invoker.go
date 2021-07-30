@@ -62,10 +62,17 @@ func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers m
 // API Gateway while propagating context.
 // functionName must include the namespace (e.g. "my-function.my-namespace").
 func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers map[string]string) InvokerResponse {
+	var reader *bytes.Reader
+
 	log.Printf("Invoke function: %s", functionName)
 
 	gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, functionName)
-	reader := bytes.NewReader(*message)
+
+	if message == nil {
+		reader = bytes.NewReader([]byte{})
+	} else {
+		reader = bytes.NewReader(*message)
+	}
 
 	if headers == nil {
 		headers = make(map[string]string)
