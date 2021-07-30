@@ -54,14 +54,14 @@ func NewInvoker(gatewayURL string, client *http.Client, contentType, callbackURL
 
 // InvokeFunction triggers the given function by accessing the API Gateway.
 // functionName must include the namespace (e.g. "my-function.my-namespace").
-func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers map[string]string) {
-	i.InvokeFunctionWithContext(context.Background(), functionName, message, headers)
+func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers map[string]string) InvokerResponse {
+	return i.InvokeFunctionWithContext(context.Background(), functionName, message, headers)
 }
 
 // InvokeFunctionWithContext triggers the given function by accessing the
 // API Gateway while propagating context.
 // functionName must include the namespace (e.g. "my-function.my-namespace").
-func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers map[string]string) {
+func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers map[string]string) InvokerResponse {
 	log.Printf("Invoke function: %s", functionName)
 
 	gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, functionName)
@@ -78,14 +78,15 @@ func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName st
 	body, statusCode, header, err := invokeFunction(ctx, i.Client, gwURL, reader, headers)
 
 	if err != nil {
-		i.Responses <- InvokerResponse{
+		invokerResponse := InvokerResponse{
 			Context: ctx,
 			Error:   errors.Wrap(err, fmt.Sprintf("unable to invoke %s", functionName)),
 		}
-		return
+		i.Responses <- invokerResponse
+		return invokerResponse
 	}
 
-	i.Responses <- InvokerResponse{
+	invokerResponse := InvokerResponse{
 		Context:  ctx,
 		Body:     body,
 		Status:   statusCode,
@@ -93,6 +94,8 @@ func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName st
 		Function: functionName,
 		Topic:    headers["X-Topic"],
 	}
+	i.Responses <- invokerResponse
+	return invokerResponse
 }
 
 // Invoke triggers a function by accessing the API Gateway
