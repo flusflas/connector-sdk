@@ -50,6 +50,17 @@
 >   SendTopic: true,
 > }
 > ```
+> 
+> #### Invoke functions without a topic (and with headers!)
+> A topic may be not required in many applications. Sometimes, you just may want
+> to invoke a specific function from your connector. The `Invoker` struct has
+> been refactored and two new methods have been added to allow invoking a
+> function using its name. Additionally, a map of headers can be used to send
+> them along with the invocation request.
+> ```go
+> invoker.InvokeFunction("my-function.my.namespace", message, headers)
+> invoker.InvokeFunctionWithContext(ctx, "my-function.my.namespace", message, headers)
+> ```
 
 The connector-sdk is a library written in Go that you can use to create event-connectors for OpenFaaS functions.
 
