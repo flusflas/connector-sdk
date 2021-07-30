@@ -73,12 +73,7 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 		gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, matchedFunction)
 		reader := bytes.NewReader(*message)
 
-		sendTopic := ""
-		if i.SendTopic {
-			sendTopic = topic
-		}
-
-		body, statusCode, header, doErr := invokefunction(ctx, i.Client, gwURL, i.ContentType, sendTopic, i.CallbackURL, reader)
+		body, statusCode, header, doErr := invokeFunction(ctx, i.Client, gwURL, reader, i.getHeaders(topic))
 
 		if doErr != nil {
 			i.Responses <- InvokerResponse{
@@ -99,7 +94,21 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 	}
 }
 
-func invokefunction(ctx context.Context, c *http.Client, gwURL, contentType, topic, callbackURL string, reader io.Reader) (*[]byte, int, *http.Header, error) {
+// getHeaders returns a map of headers to be included in the invocation request.
+func (i *Invoker) getHeaders(topic string) (headers map[string]string) {
+	if i.SendTopic && topic != "" {
+		headers["X-Topic"] = topic
+	}
+	if i.CallbackURL != "" {
+		headers["X-Callback-Url"] = i.CallbackURL
+	}
+	if i.ContentType != "" {
+		headers["Content-Type"] = i.ContentType
+	}
+	return headers
+}
+
+func invokeFunction(ctx context.Context, c *http.Client, gwURL string, reader io.Reader, headers map[string]string) (*[]byte, int, *http.Header, error) {
 
 	httpReq, err := http.NewRequest(http.MethodPost, gwURL, reader)
 	if err != nil {
@@ -111,16 +120,8 @@ func invokefunction(ctx context.Context, c *http.Client, gwURL, contentType, top
 		defer httpReq.Body.Close()
 	}
 
-	if topic != "" {
-		httpReq.Header.Add("X-Topic", topic)
-	}
-
-	if callbackURL != "" {
-		httpReq.Header.Add("X-Callback-Url", callbackURL)
-	}
-
-	if contentType != "" {
-		httpReq.Header.Set("Content-Type", contentType)
+	for k, v := range headers {
+		httpReq.Header.Add(k, v)
 	}
 
 	var body *[]byte
