@@ -52,6 +52,59 @@ func NewInvoker(gatewayURL string, client *http.Client, contentType, callbackURL
 	}
 }
 
+// InvokeFunction triggers the given function by accessing the API Gateway.
+// functionName must include the namespace (e.g. "my-function.my-namespace").
+func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers map[string]string) InvokerResponse {
+	return i.InvokeFunctionWithContext(context.Background(), functionName, message, headers)
+}
+
+// InvokeFunctionWithContext triggers the given function by accessing the
+// API Gateway while propagating context.
+// functionName must include the namespace (e.g. "my-function.my-namespace").
+func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers map[string]string) InvokerResponse {
+	var reader *bytes.Reader
+
+	log.Printf("Invoke function: %s", functionName)
+
+	gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, functionName)
+
+	if message == nil {
+		reader = bytes.NewReader([]byte{})
+	} else {
+		reader = bytes.NewReader(*message)
+	}
+
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	for k, v := range i.getHeaders("") {
+		headers[k] = v
+	}
+
+	body, statusCode, header, err := invokeFunction(ctx, i.Client, gwURL, reader, headers)
+
+	if err != nil {
+		invokerResponse := InvokerResponse{
+			Context: ctx,
+			Error:   errors.Wrap(err, fmt.Sprintf("unable to invoke %s", functionName)),
+		}
+		i.Responses <- invokerResponse
+		return invokerResponse
+	}
+
+	invokerResponse := InvokerResponse{
+		Context:  ctx,
+		Body:     body,
+		Status:   statusCode,
+		Header:   header,
+		Function: functionName,
+		Topic:    headers["X-Topic"],
+	}
+	i.Responses <- invokerResponse
+	return invokerResponse
+}
+
 // Invoke triggers a function by accessing the API Gateway
 func (i *Invoker) Invoke(topicMap *TopicMap, topic string, message *[]byte) {
 	i.InvokeWithContext(context.Background(), topicMap, topic, message)
@@ -68,38 +121,26 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 
 	matchedFunctions := topicMap.Match(topic)
 	for _, matchedFunction := range matchedFunctions {
-		log.Printf("Invoke function: %s", matchedFunction)
-
-		gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, matchedFunction)
-		reader := bytes.NewReader(*message)
-
-		sendTopic := ""
-		if i.SendTopic {
-			sendTopic = topic
-		}
-
-		body, statusCode, header, doErr := invokefunction(ctx, i.Client, gwURL, i.ContentType, sendTopic, i.CallbackURL, reader)
-
-		if doErr != nil {
-			i.Responses <- InvokerResponse{
-				Context: ctx,
-				Error:   errors.Wrap(doErr, fmt.Sprintf("unable to invoke %s", matchedFunction)),
-			}
-			continue
-		}
-
-		i.Responses <- InvokerResponse{
-			Context:  ctx,
-			Body:     body,
-			Status:   statusCode,
-			Header:   header,
-			Function: matchedFunction,
-			Topic:    topic,
-		}
+		i.InvokeFunctionWithContext(ctx, matchedFunction, message, i.getHeaders(topic))
 	}
 }
 
-func invokefunction(ctx context.Context, c *http.Client, gwURL, contentType, topic, callbackURL string, reader io.Reader) (*[]byte, int, *http.Header, error) {
+// getHeaders returns a map of headers to be included in the invocation request.
+func (i *Invoker) getHeaders(topic string) map[string]string {
+	headers := make(map[string]string)
+	if i.SendTopic && topic != "" {
+		headers["X-Topic"] = topic
+	}
+	if i.CallbackURL != "" {
+		headers["X-Callback-Url"] = i.CallbackURL
+	}
+	if i.ContentType != "" {
+		headers["Content-Type"] = i.ContentType
+	}
+	return headers
+}
+
+func invokeFunction(ctx context.Context, c *http.Client, gwURL string, reader io.Reader, headers map[string]string) (*[]byte, int, *http.Header, error) {
 
 	httpReq, err := http.NewRequest(http.MethodPost, gwURL, reader)
 	if err != nil {
@@ -111,16 +152,8 @@ func invokefunction(ctx context.Context, c *http.Client, gwURL, contentType, top
 		defer httpReq.Body.Close()
 	}
 
-	if topic != "" {
-		httpReq.Header.Add("X-Topic", topic)
-	}
-
-	if callbackURL != "" {
-		httpReq.Header.Add("X-Callback-Url", callbackURL)
-	}
-
-	if contentType != "" {
-		httpReq.Header.Set("Content-Type", contentType)
+	for k, v := range headers {
+		httpReq.Header.Add(k, v)
 	}
 
 	var body *[]byte
