@@ -116,7 +116,8 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 }
 
 // getHeaders returns a map of headers to be included in the invocation request.
-func (i *Invoker) getHeaders(topic string) (headers map[string]string) {
+func (i *Invoker) getHeaders(topic string) map[string]string {
+	headers := make(map[string]string)
 	if i.SendTopic && topic != "" {
 		headers["X-Topic"] = topic
 	}
