@@ -52,6 +52,49 @@ func NewInvoker(gatewayURL string, client *http.Client, contentType, callbackURL
 	}
 }
 
+// InvokeFunction triggers the given function by accessing the API Gateway.
+// functionName must include the namespace (e.g. "my-function.my-namespace").
+func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers map[string]string) {
+	i.InvokeFunctionWithContext(context.Background(), functionName, message, headers)
+}
+
+// InvokeFunctionWithContext triggers the given function by accessing the
+// API Gateway while propagating context.
+// functionName must include the namespace (e.g. "my-function.my-namespace").
+func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers map[string]string) {
+	log.Printf("Invoke function: %s", functionName)
+
+	gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, functionName)
+	reader := bytes.NewReader(*message)
+
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+
+	for k, v := range i.getHeaders("") {
+		headers[k] = v
+	}
+
+	body, statusCode, header, err := invokeFunction(ctx, i.Client, gwURL, reader, headers)
+
+	if err != nil {
+		i.Responses <- InvokerResponse{
+			Context: ctx,
+			Error:   errors.Wrap(err, fmt.Sprintf("unable to invoke %s", functionName)),
+		}
+		return
+	}
+
+	i.Responses <- InvokerResponse{
+		Context:  ctx,
+		Body:     body,
+		Status:   statusCode,
+		Header:   header,
+		Function: functionName,
+		Topic:    headers["X-Topic"],
+	}
+}
+
 // Invoke triggers a function by accessing the API Gateway
 func (i *Invoker) Invoke(topicMap *TopicMap, topic string, message *[]byte) {
 	i.InvokeWithContext(context.Background(), topicMap, topic, message)
@@ -68,29 +111,7 @@ func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, top
 
 	matchedFunctions := topicMap.Match(topic)
 	for _, matchedFunction := range matchedFunctions {
-		log.Printf("Invoke function: %s", matchedFunction)
-
-		gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, matchedFunction)
-		reader := bytes.NewReader(*message)
-
-		body, statusCode, header, doErr := invokeFunction(ctx, i.Client, gwURL, reader, i.getHeaders(topic))
-
-		if doErr != nil {
-			i.Responses <- InvokerResponse{
-				Context: ctx,
-				Error:   errors.Wrap(doErr, fmt.Sprintf("unable to invoke %s", matchedFunction)),
-			}
-			continue
-		}
-
-		i.Responses <- InvokerResponse{
-			Context:  ctx,
-			Body:     body,
-			Status:   statusCode,
-			Header:   header,
-			Function: matchedFunction,
-			Topic:    topic,
-		}
+		i.InvokeFunctionWithContext(ctx, matchedFunction, message, i.getHeaders(topic))
 	}
 }
 
