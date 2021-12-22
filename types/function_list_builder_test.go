@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
+	"github.com/openfaas/faas-provider/sdk"
 	"github.com/openfaas/faas-provider/types"
 )
 
-func TestBuildSingleMatchingFunction(t *testing.T) {
+func Test_BuildSingleMatchingFunction(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/system/namespaces" {
@@ -34,11 +36,13 @@ func TestBuildSingleMatchingFunction(t *testing.T) {
 		}
 	}))
 
+	u, _ := url.Parse(srv.URL)
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
+		sdk:            sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -71,11 +75,13 @@ func Test_Build_SingleFunctionNoDelimiter(t *testing.T) {
 			_, _ = w.Write(bytesOut)
 		}
 	}))
+	u, _ := url.Parse(srv.URL)
 
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:     client,
 		GatewayURL: srv.URL,
+		sdk:        sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -107,12 +113,14 @@ func TestBuildMultiMatchingFunction(t *testing.T) {
 			_, _ = w.Write(bytesOut)
 		}
 	}))
+	u, _ := url.Parse(srv.URL)
 
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
+		sdk:            sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -132,11 +140,13 @@ func TestBuildNoFunctions(t *testing.T) {
 		_, _ = w.Write(bytesOut)
 	}))
 
+	u, _ := url.Parse(srv.URL)
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
+		sdk:            sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -170,11 +180,13 @@ func Test_Build_JustDelim(t *testing.T) {
 		}
 	}))
 
+	u, _ := url.Parse(srv.URL)
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
+		sdk:            sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -207,11 +219,13 @@ func Test_Build_MultiMatchingFunctionBespokeDelim(t *testing.T) {
 		}
 	}))
 
+	u, _ := url.Parse(srv.URL)
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: "|",
+		sdk:            sdk.NewSDK(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -348,11 +362,13 @@ func Test_BuildMultipleNamespaceFunction(t *testing.T) {
 		}
 	}))
 
+	u, _ := url.Parse(srv.URL)
 	client := srv.Client()
 	builder := FunctionLookupBuilder{
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
+		sdk:            sdk.NewSDK(u, nil, http.DefaultClient),
 	}
 
 	lookup, err := builder.Build()
@@ -368,132 +384,6 @@ func Test_BuildMultipleNamespaceFunction(t *testing.T) {
 	}
 	if len(functions) != 2 {
 		t.Errorf("Topic %s - want: %d functions, got: %d", "topic1", 2, len(functions))
-	}
-}
-
-func Test_GetNamespaces(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		namespaces := []string{"openfaas-fn", "fn"}
-		bytesOut, _ := json.Marshal(namespaces)
-		_, _ = w.Write(bytesOut)
-	}))
-
-	client := srv.Client()
-	builder := FunctionLookupBuilder{
-		Client:     client,
-		GatewayURL: srv.URL,
-	}
-
-	namespaces, err := builder.getNamespaces()
-	if err != nil {
-		t.Errorf("%s", err.Error())
-	}
-	if len(namespaces) != 2 {
-		t.Errorf("Namespaces - want: %d, got: %d", 2, len(namespaces))
-	}
-}
-
-func Test_GetNamespaces_ProviderGives404(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("Not available"))
-	}))
-
-	client := srv.Client()
-	builder := FunctionLookupBuilder{
-		Client:     client,
-		GatewayURL: srv.URL,
-	}
-
-	namespaces, err := builder.getNamespaces()
-	if err != nil {
-		t.Errorf("%s", err.Error())
-	}
-	want := 0
-	got := len(namespaces)
-	if len(namespaces) != 0 {
-		t.Errorf("Namespaces when 404, want %d, but got: %d", want, got)
-	}
-}
-
-func Test_GetFunctions(t *testing.T) {
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/system/namespaces" {
-			namespaces := []string{"openfaas-fn"}
-			bytesOut, _ := json.Marshal(namespaces)
-			_, _ = w.Write(bytesOut)
-		} else {
-			functions := []types.FunctionStatus{}
-			if r.URL.Query().Get("namespace") == "openfaas-fn" {
-				annotationMap := make(map[string]string)
-				annotationMap["topic"] = "topic1"
-
-				functions = append(functions, types.FunctionStatus{
-					Name:        "echo",
-					Annotations: &annotationMap,
-					Namespace:   "openfaas-fn",
-				})
-			}
-			bytesOut, _ := json.Marshal(functions)
-			_, _ = w.Write(bytesOut)
-		}
-	}))
-
-	client := srv.Client()
-	builder := FunctionLookupBuilder{
-		Client:         client,
-		GatewayURL:     srv.URL,
-		TopicDelimiter: ",",
-	}
-
-	functions, err := builder.getFunctions("openfaas-fn")
-	if err != nil {
-		t.Errorf("%s", err)
-	}
-	if len(functions) != 1 {
-		t.Errorf("Functions - want: %d items, got: %d", 1, len(functions))
-	}
-}
-
-func Test_GetEmptyFunctions(t *testing.T) {
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/system/namespaces" {
-			namespaces := []string{"openfaas-fn"}
-			bytesOut, _ := json.Marshal(namespaces)
-			_, _ = w.Write(bytesOut)
-		} else {
-			functions := []types.FunctionStatus{}
-			if r.URL.Query().Get("namespace") == "openfaas-fn" {
-				annotationMap := make(map[string]string)
-				annotationMap["topic"] = "topic1"
-
-				functions = append(functions, types.FunctionStatus{
-					Name:        "echo",
-					Annotations: &annotationMap,
-					Namespace:   "openfaas-fn",
-				})
-
-			}
-			bytesOut, _ := json.Marshal(functions)
-			_, _ = w.Write(bytesOut)
-		}
-	}))
-
-	client := srv.Client()
-	builder := FunctionLookupBuilder{
-		Client:         client,
-		GatewayURL:     srv.URL,
-		TopicDelimiter: ",",
-	}
-
-	functions, err := builder.getFunctions("fn")
-	if err != nil {
-		t.Errorf("%s", err)
-	}
-	if len(functions) != 0 {
-		t.Errorf("Functions - want: %d items, got: %d", 0, len(functions))
 	}
 }
 
@@ -547,12 +437,14 @@ func TestBuildWithNamespace(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			u, _ := url.Parse(srv.URL)
 			client := srv.Client()
 			builder := FunctionLookupBuilder{
 				Client:         client,
 				GatewayURL:     srv.URL,
 				TopicDelimiter: ",",
 				Namespace:      test.namespace,
+				sdk:            sdk.NewSDK(u, nil, http.DefaultClient),
 			}
 
 			lookup, err := builder.Build()

@@ -42,8 +42,8 @@
 > ```
 >
 > #### Send message topic to function
-> To give some context to the invoked functions, the topic can be sent in the
-> invocation requests in an `X-Topic` header.
+> To give some context to the invoked functions, the topic can optionally be
+> sent in the invocation requests in an `X-Topic` header.
 > ```go
 > config := &types.ControllerConfig{
 >   ...
@@ -51,12 +51,11 @@
 > }
 > ```
 > 
-> #### Invoke functions without a topic (and with headers!)
+> #### Invoke functions without a topic
 > A topic may be not required in many applications. Sometimes, you just may want
 > to invoke a specific function from your connector. The `Invoker` struct has
 > been refactored and two new methods have been added to allow invoking a
-> function using its name. Additionally, a map of headers can be used to send
-> them along with the invocation request.
+> function using its name.
 > ```go
 > invoker.InvokeFunction("my-function.my.namespace", message, headers)
 > invoker.InvokeFunctionWithContext(ctx, "my-function.my.namespace", message, headers)
@@ -94,12 +93,16 @@ The tester example doesn't have an event subscription, but a for loop and sleep 
 Within the event subscriber code, you should call "Invoke()", passing in the topic and message. The functions advertise their "topic".
 
 ```go
+
+	additionalHeaders := http.Header{}
+	additionalHeaders.Add("X-Served-By", "cmd/tester")
+
 	// Simulate events emitting from queue/pub-sub
 	for {
-		log.Printf("Invoking on topic vm.powered.on - %s\n", gateway)
+		log.Printf("Invoking on topic payment - %s\n", gateway)
 		time.Sleep(2 * time.Second)
 		data := []byte("test " + time.Now().String())
-		controller.Invoke("vm.powered.on", &data)
+		controller.Invoke("payment", &data, additionalHeaders)
 	}
 ```
 

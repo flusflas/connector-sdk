@@ -7,60 +7,18 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/openfaas/faas-provider/auth"
 )
 
-// ControllerConfig configures a connector SDK controller
-type ControllerConfig struct {
-	// UpstreamTimeout controls maximum timeout invoking a function via the gateway
-	UpstreamTimeout time.Duration
-
-	//  GatewayURL is the remote OpenFaaS gateway
-	GatewayURL string
-
-	// PrintResponse if true prints the function responses
-	PrintResponse bool
-
-	// PrintResponseBody if true prints the function response body to stdout
-	PrintResponseBody bool
-
-	// RebuildInterval the interval at which the topic map is rebuilt
-	RebuildInterval time.Duration
-
-	// TopicAnnotationDelimiter defines the character upon which to split the Topic annotation value
-	TopicAnnotationDelimiter string
-
-	// AsyncFunctionInvocation if true points to the asynchronous function route
-	AsyncFunctionInvocation bool
-
-	// AsyncFunctionCallbackURL defines the callback URL for asynchronous invocations
-	AsyncFunctionCallbackURL string
-
-	// PrintSync indicates whether the sync should be logged.
-	PrintSync bool
-
-	// ContentType defines which content type will be set in the header to invoke the function. i.e "application/json".
-	// Optional, if not set the Content-Type header will not be set.
-	ContentType string
-
-	// Namespace defines the namespace of the functions to be mapped and invoked. If empty, all namespaces will be used.
-	Namespace string
-
-	// SendTopic defines whether the topic will be sent in the invocation request using the header 'X-Topic'.
-	SendTopic bool
-
-	// TopicMatcher overrides how the topic received is matched against the mapped functions. Defaults to an equality check.
-	TopicMatcher MatchTopicFunc
-}
-
 // Controller is used to invoke functions on a per-topic basis and to subscribe to responses returned by said functions.
 type Controller interface {
 	Subscribe(subscriber ResponseSubscriber)
-	Invoke(topic string, message *[]byte)
-	InvokeWithContext(ctx context.Context, topic string, message *[]byte)
+	Invoke(topic string, message *[]byte, headers http.Header)
+	InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header)
 	BeginMapBuilder()
 	Topics() []string
 }
@@ -84,8 +42,8 @@ type controller struct {
 	// operations
 	Subscribers []ResponseSubscriber
 
-	// Lock used for synchronizing subscribers
-	Lock *sync.RWMutex
+	// lock used for synchronizing subscribers
+	lock *sync.RWMutex
 }
 
 // NewController create a new connector SDK controller
@@ -96,8 +54,11 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 	invoker := NewInvoker(gatewayFunctionPath,
 		MakeClient(config.UpstreamTimeout),
 		config.ContentType,
+		config.PrintResponse,
+		config.PrintRequestBody,
+		config.UserAgent,
 		config.AsyncFunctionCallbackURL,
-		config.PrintResponse, config.SendTopic)
+		config.SendTopic)
 
 	subs := []ResponseSubscriber{}
 
@@ -109,11 +70,10 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 		TopicMap:    &topicMap,
 		Credentials: credentials,
 		Subscribers: subs,
-		Lock:        &sync.RWMutex{},
+		lock:        &sync.RWMutex{},
 	}
 
 	if config.PrintResponse {
-		// printer := &{}
 		c.Subscribe(&ResponsePrinter{config.PrintResponseBody})
 	}
 
@@ -121,11 +81,11 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 		for {
 			res := <-*ch
 
-			controller.Lock.RLock()
+			controller.lock.RLock()
 			for _, sub := range controller.Subscribers {
 				sub.Response(res)
 			}
-			controller.Lock.RUnlock()
+			controller.lock.RUnlock()
 		}
 	}(&invoker.Responses, &c)
 
@@ -137,37 +97,33 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 // Note: it is not possible to Unsubscribe at this point using
 // the API of the controller
 func (c *controller) Subscribe(subscriber ResponseSubscriber) {
-	c.Lock.Lock()
-	defer c.Lock.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.Subscribers = append(c.Subscribers, subscriber)
 }
 
 // Invoke attempts to invoke any functions which match the
 // topic the incoming message was published on.
-func (c *controller) Invoke(topic string, message *[]byte) {
-	c.InvokeWithContext(context.Background(), topic, message)
+func (c *controller) Invoke(topic string, message *[]byte, headers http.Header) {
+	c.InvokeWithContext(context.Background(), topic, message, headers)
 }
 
 // InvokeWithContext attempts to invoke any functions which match the topic
 // the incoming message was published on while propagating context.
-func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte) {
-	c.Invoker.InvokeWithContext(ctx, c.TopicMap, topic, message)
+func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header) {
+	c.Invoker.InvokeWithContext(ctx, c.TopicMap, topic, message, headers)
 }
 
 // BeginMapBuilder begins to build a map of function->topic by
 // querying the API gateway.
 func (c *controller) BeginMapBuilder() {
 
-	lookupBuilder := FunctionLookupBuilder{
-		GatewayURL:     c.Config.GatewayURL,
-		Client:         MakeClient(c.Config.UpstreamTimeout),
-		Credentials:    c.Credentials,
-		TopicDelimiter: c.Config.TopicAnnotationDelimiter,
-		Namespace:      c.Config.Namespace,
-	}
+	lookupBuilder := NewFunctionLookupBuilder(c.Config.GatewayURL,
+		c.Config.TopicAnnotationDelimiter, MakeClient(c.Config.UpstreamTimeout),
+		c.Credentials, c.Config.Namespace)
 
 	ticker := time.NewTicker(c.Config.RebuildInterval)
-	go c.synchronizeLookups(ticker, &lookupBuilder, c.TopicMap)
+	go c.synchronizeLookups(ticker, lookupBuilder, c.TopicMap)
 }
 
 func (c *controller) synchronizeLookups(ticker *time.Ticker,

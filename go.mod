@@ -1,8 +1,8 @@
 module github.com/flusflas/connector-sdk
 
-go 1.13
+go 1.18
 
 require (
-	github.com/openfaas/faas-provider v0.16.1
-	github.com/pkg/errors v0.9.1
+	github.com/alexellis/go-execute v0.5.0
+	github.com/openfaas/faas-provider v0.19.1
 )
