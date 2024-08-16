@@ -40,9 +40,7 @@ func (t *TopicMap) Match(topicName string) []string {
 
 	for key, functions := range *t.lookup {
 		if t.matchFunc(topicName, key) {
-			for _, function := range functions {
-				values = append(values, function)
-			}
+			values = append(values, functions...)
 		}
 	}
 
