@@ -56,18 +56,16 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 		config.ContentType,
 		config.PrintResponse,
 		config.PrintRequestBody,
-		config.UserAgent,
-		config.AsyncFunctionCallbackURL,
-		config.SendTopic)
+		WithInvokerUserAgent(config.UserAgent),
+		WithInvokerAsyncCallbackURL(config.AsyncFunctionCallbackURL),
+		WithInvokerSendTopic(config.SendTopic))
 
 	subs := []ResponseSubscriber{}
-
-	topicMap := NewTopicMap(config.TopicMatcher)
 
 	c := controller{
 		Config:      config,
 		Invoker:     invoker,
-		TopicMap:    &topicMap,
+		TopicMap:    NewTopicMap(config.TopicMatcher),
 		Credentials: credentials,
 		Subscribers: subs,
 		lock:        &sync.RWMutex{},
@@ -111,7 +109,7 @@ func (c *controller) Invoke(topic string, message *[]byte, headers http.Header) 
 // InvokeWithContext attempts to invoke any functions which match the topic
 // the incoming message was published on while propagating context.
 func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header) {
-	c.Invoker.InvokeWithContext(ctx, c.TopicMap, topic, message, headers)
+	c.Invoker.InvokeWithTopic(ctx, c.TopicMap, topic, message, headers)
 }
 
 // BeginMapBuilder begins to build a map of function->topic by
