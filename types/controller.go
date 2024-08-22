@@ -17,8 +17,8 @@ import (
 // Controller is used to invoke functions on a per-topic basis and to subscribe to responses returned by said functions.
 type Controller interface {
 	Subscribe(subscriber ResponseSubscriber)
-	Invoke(topic string, message *[]byte, headers http.Header)
-	InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header)
+	Invoke(topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc)
+	InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc)
 	BeginMapBuilder()
 	Topics() []string
 }
@@ -102,14 +102,14 @@ func (c *controller) Subscribe(subscriber ResponseSubscriber) {
 
 // Invoke attempts to invoke any functions which match the
 // topic the incoming message was published on.
-func (c *controller) Invoke(topic string, message *[]byte, headers http.Header) {
-	c.InvokeWithContext(context.Background(), topic, message, headers)
+func (c *controller) Invoke(topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) {
+	c.InvokeWithContext(context.Background(), topic, message, headers, opts...)
 }
 
 // InvokeWithContext attempts to invoke any functions which match the topic
 // the incoming message was published on while propagating context.
-func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header) {
-	c.Invoker.InvokeWithTopic(ctx, c.TopicMap, topic, message, headers)
+func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) {
+	c.Invoker.InvokeWithTopic(ctx, c.TopicMap, topic, message, headers, opts...)
 }
 
 // BeginMapBuilder begins to build a map of function->topic by
