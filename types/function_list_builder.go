@@ -4,14 +4,15 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/openfaas/faas-provider/auth"
-	"github.com/openfaas/faas-provider/sdk"
 	"github.com/openfaas/faas-provider/types"
+	"github.com/openfaas/go-sdk"
 )
 
 // FunctionLookupBuilder builds a list of OpenFaaS functions
@@ -21,13 +22,13 @@ type FunctionLookupBuilder struct {
 	Credentials    *auth.BasicAuthCredentials
 	TopicDelimiter string
 	Namespace      string
-	sdk            *sdk.SDK
+	sdk            *sdk.Client
 }
 
-func NewFunctionLookupBuilder(gatewayURL, topicDelimiter string, client *http.Client, credentials *auth.BasicAuthCredentials, namespace string) *FunctionLookupBuilder {
+func NewFunctionLookupBuilder(gatewayURL, topicDelimiter string, client *http.Client, credentials sdk.ClientAuth, namespace string) *FunctionLookupBuilder {
 	u, _ := url.Parse(gatewayURL)
 	return &FunctionLookupBuilder{
-		sdk:            sdk.NewSDK(u, credentials, client),
+		sdk:            sdk.NewClient(u, credentials, client),
 		TopicDelimiter: topicDelimiter,
 		Namespace:      namespace,
 	}
@@ -40,7 +41,7 @@ func (s *FunctionLookupBuilder) Build() (map[string][]string, error) {
 	var namespaces []string
 
 	if s.Namespace == "" {
-		namespaces, err = s.sdk.GetNamespaces()
+		namespaces, err = s.sdk.GetNamespaces(context.Background())
 		if err != nil {
 			return map[string][]string{}, err
 		}
@@ -55,7 +56,7 @@ func (s *FunctionLookupBuilder) Build() (map[string][]string, error) {
 	}
 
 	for _, namespace := range namespaces {
-		functions, err := s.sdk.GetFunctions(namespace)
+		functions, err := s.sdk.GetFunctions(context.Background(), namespace)
 		if err != nil {
 			return map[string][]string{}, fmt.Errorf("unable to get functions in: %s, error: %w", namespace, err)
 		}

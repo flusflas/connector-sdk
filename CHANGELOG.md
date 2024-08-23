@@ -7,17 +7,26 @@ of optional functions that can override the default behavior.
 
 ### Added
 
-- The `Controller` interface and the `Invoker` struct now accept a variadic list
+- **[Breaking Change]** The `Controller` interface and the `Invoker` struct now accept a variadic list
   of functional options to further customize their behavior:
   - `WithInvokeTopic()`: Invokes the functions that match the topic.
   - `WithInvokeAsyncCallbackURL()`: Sets the callback URL for asynchronous invocations.
   - `WithInvokeContentType()`: Sets the content type for the invoker.
 
-
-- The `Invoker` constructor now accepts a variadic list of functional options:
+- **[Breaking Change]** The `Invoker` constructor now accepts a variadic list of functional options:
   - `WithInvokerSendTopic()`: Whether to send the topic in the invocation request headers.
   - `WithInvokerAsyncCallbackURL()`: Sets the callback URL for asynchronous invocations.
   - `WithInvokerUserAgent()`: Sets the user agent for the invoker.
+- The [`go-sdk`](github.com/openfaas/go-sdk) package has been added as a
+  dependency to replace the `faas-provider` for authentication and some requests
+  to the OpenFaaS gateway.
+
+### Changed
+
+- **[Breaking Change]** Updated [faas-provider](github.com/openfaas/faas-provider)
+  to v0.25.4.
+- **[Breaking Change]** The `controller` and `FunctionLookupBuilder` structs now
+  accept a `sdk.Clientauth` instance for authentication.
 
 ### Removed
 

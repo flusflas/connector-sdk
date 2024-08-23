@@ -1,4 +1,10 @@
 github.com/alexellis/go-execute v0.6.0 h1:FVGoudJnWSObwf9qmehbvVuvhK6g1UpKOCBjS+OUXEA=
 github.com/alexellis/go-execute v0.6.0/go.mod h1:nlg2F6XdYydUm1xXQMMiuibQCV1mveybBkNWfdNznjk=
-github.com/openfaas/faas-provider v0.19.1 h1:xH8lTWabfDZwzIvC0u1AO48ghD3BNw6Vo231DLqTeI0=
-github.com/openfaas/faas-provider v0.19.1/go.mod h1:Farrp+9Med8LeK3aoYpqplMP8f5ebTILbCSLg2LPLZk=
+github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/openfaas/faas-provider v0.25.4 h1:Cly/M8/Q+OOn8qFxxeaZGyC5B2x4f+RSU28hej+1WcM=
+github.com/openfaas/faas-provider v0.25.4/go.mod h1:t6RSPCvNfiqYEzf/CtdIj+0OItdyK6IzrOca1EOLNSg=
+github.com/openfaas/go-sdk v0.2.14 h1:N3bq0yparYZR6pR1AhZiPGvV8GAmQ1UfjmCOGaZMs68=
+github.com/openfaas/go-sdk v0.2.14/go.mod h1:DrKUCQ4F8L2cJOmWHNoX8zB8LQIZc/4hRgAtT4t0s4k=
+go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
+go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=

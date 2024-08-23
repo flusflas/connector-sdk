@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/openfaas/go-sdk"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/flusflas/connector-sdk/types"
-	"github.com/openfaas/faas-provider/auth"
 )
 
 func main() {
@@ -37,8 +37,8 @@ func main() {
 		password = lookupPasswordViaKubectl()
 	}
 
-	creds := &auth.BasicAuthCredentials{
-		User:     username,
+	creds := &sdk.BasicAuth{
+		Username: username,
 		Password: password,
 	}
 

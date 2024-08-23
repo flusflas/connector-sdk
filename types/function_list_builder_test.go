@@ -5,12 +5,12 @@ package types
 
 import (
 	"encoding/json"
+	"github.com/openfaas/go-sdk"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	"github.com/openfaas/faas-provider/sdk"
 	"github.com/openfaas/faas-provider/types"
 )
 
@@ -42,7 +42,7 @@ func Test_BuildSingleMatchingFunction(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
-		sdk:            sdk.NewSDK(u, nil, client),
+		sdk:            sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -81,7 +81,7 @@ func Test_Build_SingleFunctionNoDelimiter(t *testing.T) {
 	builder := FunctionLookupBuilder{
 		Client:     client,
 		GatewayURL: srv.URL,
-		sdk:        sdk.NewSDK(u, nil, client),
+		sdk:        sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -120,7 +120,7 @@ func TestBuildMultiMatchingFunction(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
-		sdk:            sdk.NewSDK(u, nil, client),
+		sdk:            sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -146,7 +146,7 @@ func TestBuildNoFunctions(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
-		sdk:            sdk.NewSDK(u, nil, client),
+		sdk:            sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -186,7 +186,7 @@ func Test_Build_JustDelim(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
-		sdk:            sdk.NewSDK(u, nil, client),
+		sdk:            sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -225,7 +225,7 @@ func Test_Build_MultiMatchingFunctionBespokeDelim(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: "|",
-		sdk:            sdk.NewSDK(u, nil, client),
+		sdk:            sdk.NewClient(u, nil, client),
 	}
 
 	lookup, err := builder.Build()
@@ -368,7 +368,7 @@ func Test_BuildMultipleNamespaceFunction(t *testing.T) {
 		Client:         client,
 		GatewayURL:     srv.URL,
 		TopicDelimiter: ",",
-		sdk:            sdk.NewSDK(u, nil, http.DefaultClient),
+		sdk:            sdk.NewClient(u, nil, http.DefaultClient),
 	}
 
 	lookup, err := builder.Build()
@@ -444,7 +444,7 @@ func TestBuildWithNamespace(t *testing.T) {
 				GatewayURL:     srv.URL,
 				TopicDelimiter: ",",
 				Namespace:      test.namespace,
-				sdk:            sdk.NewSDK(u, nil, http.DefaultClient),
+				sdk:            sdk.NewClient(u, nil, http.DefaultClient),
 			}
 
 			lookup, err := builder.Build()
