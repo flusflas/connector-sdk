@@ -59,17 +59,6 @@ func NewInvoker(gatewayURL string, client *http.Client, contentType string, prin
 // Invoke triggers the given function by accessing the API Gateway.
 // functionName must include the namespace (e.g. "my-function.my-namespace").
 func (i *Invoker) Invoke(ctx context.Context, functionName string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) InvokerResponse {
-	if len(*message) == 0 {
-		invokerResp := InvokerResponse{
-			Context:  ctx,
-			Error:    fmt.Errorf("no message to send"),
-			Function: functionName,
-			Duration: time.Millisecond * 0,
-		}
-		i.Responses <- invokerResp
-		return invokerResp
-	}
-
 	o := &InvokeOptions{}
 	for _, optFn := range opts {
 		optFn(o)

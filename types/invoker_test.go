@@ -124,12 +124,30 @@ func Test_Invoke(t *testing.T) {
 				message:  pointer([]byte("")),
 				headers:  http.Header{},
 			},
-			contentType: "application/json",
 			want: want{
 				resp: InvokerResponse{
 					Context:  context.Background(),
-					Error:    fmt.Errorf("no message to send"),
+					Body:     pointer([]byte(`{"foo": "response"}`)),
+					Status:   http.StatusOK,
+					Error:    nil,
 					Function: "test-function",
+				},
+				handlerFunc: func(w http.ResponseWriter, r *http.Request) {
+					if _, exists := r.Header["Content-Type"]; exists {
+						t.Errorf("Content-Type header should not exist")
+					}
+					if _, exists := r.Header["X-Topic"]; exists {
+						t.Errorf("X-Topic header should not exist")
+					}
+					body, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Errorf("Error reading request body: %v", err)
+					}
+					if string(body) != "" {
+						t.Errorf("Expected empty body, got %s", string(body))
+					}
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(`{"foo": "response"}`))
 				},
 			},
 		},
