@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.0](https://github.com/flusflas/connector-sdk/tree/v0.2.0) (TBD)
+## [0.2.0](https://github.com/flusflas/connector-sdk/tree/v0.2.0) (2024-09-17)
 
 The `Invoker` struct has been refactored to extend its usability through the use
 of optional functions that can override the default behavior.
