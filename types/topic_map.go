@@ -13,14 +13,14 @@ func defaultMatchTopic(topicReceived, topicFunction string) bool {
 	return topicReceived == topicFunction
 }
 
-func NewTopicMap(matchFunc MatchTopicFunc) TopicMap {
+func NewTopicMap(matchFunc MatchTopicFunc) *TopicMap {
 	lookup := make(map[string][]string)
 
 	if matchFunc == nil {
 		matchFunc = defaultMatchTopic
 	}
 
-	return TopicMap{
+	return &TopicMap{
 		lookup:    &lookup,
 		lock:      sync.RWMutex{},
 		matchFunc: matchFunc,
@@ -38,11 +38,14 @@ func (t *TopicMap) Match(topicName string) []string {
 	defer t.lock.RUnlock()
 	var values []string
 
+	matchFunc := t.matchFunc
+	if matchFunc == nil {
+		matchFunc = defaultMatchTopic
+	}
+
 	for key, functions := range *t.lookup {
-		if t.matchFunc(topicName, key) {
-			for _, function := range functions {
-				values = append(values, function)
-			}
+		if matchFunc(topicName, key) {
+			values = append(values, functions...)
 		}
 	}
 

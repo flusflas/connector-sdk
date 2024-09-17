@@ -4,13 +4,14 @@
 package types
 
 import (
+	"github.com/openfaas/go-sdk"
 	"os"
 
 	"github.com/openfaas/faas-provider/auth"
 )
 
-func GetCredentials() *auth.BasicAuthCredentials {
-	var credentials *auth.BasicAuthCredentials
+func GetCredentials() *sdk.BasicAuth {
+	var credentials *sdk.BasicAuth
 
 	if val, ok := os.LookupEnv("basic_auth"); ok && len(val) > 0 {
 		if val == "true" || val == "1" {
@@ -25,7 +26,9 @@ func GetCredentials() *auth.BasicAuthCredentials {
 			if err != nil {
 				panic(err)
 			}
-			credentials = res
+
+			credentials.Username = res.User
+			credentials.Password = res.Password
 		}
 	}
 	return credentials

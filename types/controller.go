@@ -6,19 +6,18 @@ package types
 import (
 	"context"
 	"fmt"
+	"github.com/openfaas/go-sdk"
 	"log"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/openfaas/faas-provider/auth"
 )
 
 // Controller is used to invoke functions on a per-topic basis and to subscribe to responses returned by said functions.
 type Controller interface {
 	Subscribe(subscriber ResponseSubscriber)
-	Invoke(topic string, message *[]byte, headers http.Header)
-	InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header)
+	Invoke(topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc)
+	InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc)
 	BeginMapBuilder()
 	Topics() []string
 }
@@ -35,7 +34,7 @@ type controller struct {
 	TopicMap *TopicMap
 
 	// Credentials to access gateway
-	Credentials *auth.BasicAuthCredentials
+	Credentials sdk.ClientAuth
 
 	// Subscribers which can receive messages from invocations.
 	// See note on ResponseSubscriber interface about blocking/long-running
@@ -47,7 +46,7 @@ type controller struct {
 }
 
 // NewController create a new connector SDK controller
-func NewController(credentials *auth.BasicAuthCredentials, config *ControllerConfig) Controller {
+func NewController(credentials sdk.ClientAuth, config *ControllerConfig) Controller {
 
 	gatewayFunctionPath := gatewayRoute(config)
 
@@ -56,18 +55,16 @@ func NewController(credentials *auth.BasicAuthCredentials, config *ControllerCon
 		config.ContentType,
 		config.PrintResponse,
 		config.PrintRequestBody,
-		config.UserAgent,
-		config.AsyncFunctionCallbackURL,
-		config.SendTopic)
+		WithInvokerUserAgent(config.UserAgent),
+		WithInvokerAsyncCallbackURL(config.AsyncFunctionCallbackURL),
+		WithInvokerSendTopic(config.SendTopic))
 
 	subs := []ResponseSubscriber{}
-
-	topicMap := NewTopicMap(config.TopicMatcher)
 
 	c := controller{
 		Config:      config,
 		Invoker:     invoker,
-		TopicMap:    &topicMap,
+		TopicMap:    NewTopicMap(config.TopicMatcher),
 		Credentials: credentials,
 		Subscribers: subs,
 		lock:        &sync.RWMutex{},
@@ -104,23 +101,24 @@ func (c *controller) Subscribe(subscriber ResponseSubscriber) {
 
 // Invoke attempts to invoke any functions which match the
 // topic the incoming message was published on.
-func (c *controller) Invoke(topic string, message *[]byte, headers http.Header) {
-	c.InvokeWithContext(context.Background(), topic, message, headers)
+func (c *controller) Invoke(topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) {
+	c.InvokeWithContext(context.Background(), topic, message, headers, opts...)
 }
 
 // InvokeWithContext attempts to invoke any functions which match the topic
 // the incoming message was published on while propagating context.
-func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header) {
-	c.Invoker.InvokeWithContext(ctx, c.TopicMap, topic, message, headers)
+func (c *controller) InvokeWithContext(ctx context.Context, topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) {
+	c.Invoker.InvokeWithTopic(ctx, c.TopicMap, topic, message, headers, opts...)
 }
 
 // BeginMapBuilder begins to build a map of function->topic by
 // querying the API gateway.
 func (c *controller) BeginMapBuilder() {
-
 	lookupBuilder := NewFunctionLookupBuilder(c.Config.GatewayURL,
-		c.Config.TopicAnnotationDelimiter, MakeClient(c.Config.UpstreamTimeout),
-		c.Credentials, c.Config.Namespace)
+		c.Config.TopicAnnotationDelimiter,
+		MakeClient(c.Config.UpstreamTimeout),
+		c.Credentials,
+		c.Config.Namespace)
 
 	ticker := time.NewTicker(c.Config.RebuildInterval)
 	go c.synchronizeLookups(ticker, lookupBuilder, c.TopicMap)

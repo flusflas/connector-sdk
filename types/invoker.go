@@ -22,9 +22,7 @@ type Invoker struct {
 	GatewayURL    string
 	ContentType   string
 	Responses     chan InvokerResponse
-	UserAgent     string
-	CallbackURL   string
-	SendTopic     bool
+	opts          *InvokerOptions
 }
 
 // InvokerResponse is a wrapper to contain the response or error the Invoker
@@ -41,42 +39,43 @@ type InvokerResponse struct {
 }
 
 // NewInvoker constructs an Invoker instance
-func NewInvoker(gatewayURL string, client *http.Client, contentType string, printResponse, printRequest bool, userAgent string, callbackURL string, sendTopic bool) *Invoker {
+func NewInvoker(gatewayURL string, client *http.Client, contentType string, printResponse, printRequest bool, opts ...InvokerOptionFunc) *Invoker {
+	o := &InvokerOptions{}
+	for _, optFn := range opts {
+		optFn(o)
+	}
+
 	return &Invoker{
 		PrintResponse: printResponse,
 		PrintRequest:  printRequest,
 		Client:        client,
 		GatewayURL:    gatewayURL,
 		ContentType:   contentType,
-		Responses:     make(chan InvokerResponse),
-		CallbackURL:   callbackURL,
-		SendTopic:     sendTopic,
+		Responses:     make(chan InvokerResponse, 1),
+		opts:          o,
 	}
 }
 
-// InvokeFunction triggers the given function by accessing the API Gateway.
+// Invoke triggers the given function by accessing the API Gateway.
 // functionName must include the namespace (e.g. "my-function.my-namespace").
-func (i *Invoker) InvokeFunction(functionName string, message *[]byte, headers http.Header) InvokerResponse {
-	return i.InvokeFunctionWithContext(context.Background(), functionName, message, headers)
-}
-
-// InvokeFunctionWithContext triggers the given function by accessing the
-// API Gateway while propagating context.
-// functionName must include the namespace (e.g. "my-function.my-namespace").
-func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName string, message *[]byte, headers http.Header) InvokerResponse {
-	var reader *bytes.Reader
+func (i *Invoker) Invoke(ctx context.Context, functionName string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) InvokerResponse {
+	o := &InvokeOptions{}
+	for _, optFn := range opts {
+		optFn(o)
+	}
 
 	log.Printf("Invoke function: %s", functionName)
 
 	gwURL := fmt.Sprintf("%s/%s", i.GatewayURL, functionName)
 
+	var reader *bytes.Reader
 	if message == nil {
 		reader = bytes.NewReader([]byte{})
 	} else {
 		reader = bytes.NewReader(*message)
 	}
 
-	topic := headers.Get("X-Topic")
+	topic := o.topic
 	if i.PrintRequest {
 		log.Printf("[connector] %s => %s body:\t%s", topic, functionName, string(*message))
 	}
@@ -84,10 +83,24 @@ func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName st
 	if headers == nil {
 		headers = http.Header{}
 	}
-	if i.CallbackURL != "" {
-		headers.Set("X-Callback-Url", i.CallbackURL)
+
+	if i.opts.userAgent != "" {
+		headers.Set("User-Agent", i.opts.userAgent)
 	}
-	if i.ContentType != "" {
+
+	if i.opts.sendTopic {
+		headers.Set("X-Topic", topic)
+	}
+
+	if o.asyncCallbackURL != "" {
+		headers.Set("X-Callback-Url", o.asyncCallbackURL)
+	} else if i.opts.asyncCallbackURL != "" {
+		headers.Set("X-Callback-Url", i.opts.asyncCallbackURL)
+	}
+
+	if o.contentType != "" {
+		headers.Set("Content-Type", o.contentType)
+	} else if i.ContentType != "" {
 		headers.Set("Content-Type", i.ContentType)
 	}
 
@@ -96,7 +109,9 @@ func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName st
 	if err != nil {
 		invokerResponse := InvokerResponse{
 			Context:  ctx,
+			Status:   statusCode,
 			Error:    fmt.Errorf("unable to invoke %s, error: %w", functionName, err),
+			Function: functionName,
 			Duration: time.Since(start),
 		}
 		i.Responses <- invokerResponse
@@ -116,30 +131,27 @@ func (i *Invoker) InvokeFunctionWithContext(ctx context.Context, functionName st
 	return invokerResponse
 }
 
-// Invoke triggers a function using a topic by accessing the API Gateway.
-func (i *Invoker) Invoke(topicMap *TopicMap, topic string, message *[]byte, headers http.Header) {
-	i.InvokeWithContext(context.Background(), topicMap, topic, message, headers)
-}
-
-// InvokeWithContext triggers a function using a topic by accessing the API Gateway while propagating context.
-func (i *Invoker) InvokeWithContext(ctx context.Context, topicMap *TopicMap, topic string, message *[]byte, headers http.Header) {
-	if len(*message) == 0 {
+// InvokeWithTopic triggers a function using a topic by accessing the API Gateway.
+func (i *Invoker) InvokeWithTopic(ctx context.Context, topicMap *TopicMap, topic string, message *[]byte, headers http.Header, opts ...InvokeOptionFunc) {
+	if len(*message) == 0 || topicMap == nil {
 		i.Responses <- InvokerResponse{
 			Context:  ctx,
 			Error:    fmt.Errorf("no message to send"),
 			Duration: time.Millisecond * 0,
 		}
+		return
 	}
+
+	o := &InvokeOptions{}
+	for _, optFn := range opts {
+		optFn(o)
+	}
+
+	opts = append(opts, WithInvokeTopic(topic))
 
 	matchedFunctions := topicMap.Match(topic)
 	for _, matchedFunction := range matchedFunctions {
-		if headers == nil {
-			headers = http.Header{}
-		}
-		if i.SendTopic {
-			headers.Set("X-Topic", topic)
-		}
-		i.InvokeFunctionWithContext(ctx, matchedFunction, message, headers)
+		i.Invoke(ctx, matchedFunction, message, headers, opts...)
 	}
 }
 
@@ -148,8 +160,6 @@ func (i *Invoker) invoke(ctx context.Context, c *http.Client, gwURL string, read
 	if err != nil {
 		return nil, http.StatusServiceUnavailable, nil, err
 	}
-
-	req.Header.Set("User-Agent", i.UserAgent)
 
 	if v := req.Header.Get("X-Connector"); v == "" {
 		req.Header.Set("X-Connector", "connector-sdk")
